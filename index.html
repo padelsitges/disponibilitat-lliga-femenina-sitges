@@ -524,13 +524,30 @@ function saveAvailability() {
   }, 1200);
 }
 
-function loadData(callback) {
-  const callbackName = '__lligaApiCallback_' + Date.now();
+function loadData(callback, attempt = 1) {
+  const maxAttempts = 3;
+  const callbackName = '__lligaApiCallback_' + Date.now() + '_' + attempt;
   let finished = false;
+  let timeoutId = null;
 
   function cleanup(script) {
+    if (timeoutId) clearTimeout(timeoutId);
     delete window[callbackName];
     if (script && script.parentNode) script.remove();
+  }
+
+  function retryOrFail(message) {
+    if (finished) return;
+    finished = true;
+
+    const script = document.getElementById(callbackName);
+    cleanup(script);
+
+    if (attempt < maxAttempts) {
+      setTimeout(() => loadData(callback, attempt + 1), 900);
+    } else {
+      showError(message || 'No s’ha pogut carregar la resposta de la API de la Lliga.');
+    }
   }
 
   function success(data, script) {
@@ -552,10 +569,11 @@ function loadData(callback) {
 
       if (typeof callback === 'function') callback();
     } catch (error) {
-      showError(error.message);
-    } finally {
-      cleanup(script);
+      retryOrFail(error.message);
+      return;
     }
+
+    cleanup(script);
   }
 
   window[callbackName] = function(data) {
@@ -568,11 +586,13 @@ function loadData(callback) {
   script.src = `${API_URL}?callback=${callbackName}&_=${Date.now()}`;
 
   script.onerror = () => {
-    if (finished) return;
-    finished = true;
-    cleanup(script);
-    showError('No s’ha pogut carregar la resposta de la API de la Lliga.');
+    retryOrFail('No s’ha pogut carregar la resposta de la API de la Lliga.');
   };
+
+  // Si Apps Script tarda massa, intentem de nou automàticament.
+  timeoutId = setTimeout(() => {
+    retryOrFail('La API està trigant massa a respondre.');
+  }, 8000);
 
   document.body.appendChild(script);
 }
