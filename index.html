@@ -526,8 +526,17 @@ function saveAvailability() {
 
 function loadData(callback) {
   const callbackName = '__lligaApiCallback_' + Date.now();
+  let finished = false;
 
-  window[callbackName] = function(data) {
+  function cleanup(script) {
+    delete window[callbackName];
+    if (script && script.parentNode) script.remove();
+  }
+
+  function success(data, script) {
+    if (finished) return;
+    finished = true;
+
     try {
       if (!data || !data.ok) {
         throw new Error(data?.error || 'La API no ha retornat dades correctes.');
@@ -538,26 +547,31 @@ function loadData(callback) {
       DATA.disponibilitat = data.disponibilitat || [];
 
       availabilityState = availabilityMapFromServer();
-
       renderCategories();
       populatePairs(selectedPair);
+
       if (typeof callback === 'function') callback();
     } catch (error) {
       showError(error.message);
     } finally {
-      delete window[callbackName];
-      const script = document.getElementById(callbackName);
-      if (script) script.remove();
+      cleanup(script);
     }
+  }
+
+  window[callbackName] = function(data) {
+    success(data, document.getElementById(callbackName));
   };
 
   const script = document.createElement('script');
   script.id = callbackName;
-  script.src = `${API_URL}?callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
+  script.async = true;
+  script.src = `${API_URL}?callback=${callbackName}&_=${Date.now()}`;
+
   script.onerror = () => {
-    showError('No s’ha pogut connectar amb la API de la Lliga.');
-    delete window[callbackName];
-    script.remove();
+    if (finished) return;
+    finished = true;
+    cleanup(script);
+    showError('No s’ha pogut carregar la resposta de la API de la Lliga.');
   };
 
   document.body.appendChild(script);
