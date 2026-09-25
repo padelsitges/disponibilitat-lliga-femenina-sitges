@@ -93,6 +93,7 @@ input{accent-color:#2d8a4a}
 const API_URL = 'https://script.google.com/macros/s/AKfycbxJiP_hg3jNadvGPaMCZ3uTohaDnwn1ps-iWlXWZE5FbWmbZLweE9Z3719u3sfy8JZeAw/exec';
 const MONTH = '2026-10';
 const MONTH_LABEL = 'octubre de 2026';
+const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10';
 
 let DATA = {
   month: MONTH,
@@ -516,11 +517,25 @@ function saveAvailability() {
     form.remove();
     iframe.remove();
 
-    status.textContent = '✓ Guardat. Actualitzant…';
-
-    loadData(() => {
-      status.textContent = '✓ Disponibilitat actualitzada';
+    // Actualitzem la disponibilitat localment: no cal tornar a descarregar
+    // tots els partits i totes les disponibilitats de la Lliga.
+    DATA.disponibilitat = DATA.disponibilitat.filter(x => x.pairId !== pair.id || !String(x.date || '').startsWith(MONTH));
+    items.forEach(item => {
+      DATA.disponibilitat.push({
+        pairId: pair.id,
+        pair: pair.name,
+        date: item.data,
+        day: item.dia,
+        slot: item.franja,
+        otherHour: item.hora_altra || ''
+      });
     });
+    availabilityState = availabilityMapFromServer();
+    render();
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
+    } catch (e) {}
+    status.textContent = '✓ Disponibilitat actualitzada';
   }, 1200);
 }
 
@@ -539,13 +554,12 @@ function loadData(callback, attempt = 1) {
   function retryOrFail(message) {
     if (finished) return;
     finished = true;
-
     const script = document.getElementById(callbackName);
     cleanup(script);
 
     if (attempt < maxAttempts) {
-      setTimeout(() => loadData(callback, attempt + 1), 900);
-    } else {
+      setTimeout(() => loadData(callback, attempt + 1), 700);
+    } else if (!DATA.parelles.length) {
       showError(message || 'No s’ha pogut carregar la resposta de la API de la Lliga.');
     }
   }
@@ -563,9 +577,14 @@ function loadData(callback, attempt = 1) {
       DATA.partits = data.partits || [];
       DATA.disponibilitat = data.disponibilitat || [];
 
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
+      } catch (e) {}
+
       availabilityState = availabilityMapFromServer();
       renderCategories();
       populatePairs(selectedPair);
+      render();
 
       if (typeof callback === 'function') callback();
     } catch (error) {
@@ -583,16 +602,15 @@ function loadData(callback, attempt = 1) {
   const script = document.createElement('script');
   script.id = callbackName;
   script.async = true;
-  script.src = `${API_URL}?callback=${callbackName}&_=${Date.now()}`;
+  script.src = `${API_URL}?callback=${callbackName}`;
 
   script.onerror = () => {
     retryOrFail('No s’ha pogut carregar la resposta de la API de la Lliga.');
   };
 
-  // Si Apps Script tarda massa, intentem de nou automàticament.
   timeoutId = setTimeout(() => {
     retryOrFail('La API està trigant massa a respondre.');
-  }, 8000);
+  }, 7000);
 
   document.body.appendChild(script);
 }
@@ -621,10 +639,25 @@ avEl.addEventListener('change', () => {
   renderMatches();
 });
 
-// Estat inicial mentre carrega.
+// Estat inicial: si tenim una còpia local, la mostrem immediatament
+// i després la refresquem en segon pla des de Google Sheets.
 catEl.innerHTML = '<option>Carregant…</option>';
 pairEl.innerHTML = '<option>Carregant…</option>';
 
+let usedCache = false;
+try {
+  const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+  if (cached && cached.data && Array.isArray(cached.data.parelles) && cached.data.parelles.length) {
+    DATA = cached.data;
+    availabilityState = availabilityMapFromServer();
+    renderCategories();
+    populatePairs();
+    render();
+    usedCache = true;
+  }
+} catch (e) {}
+
+// Sempre refresquem en segon pla per tenir dades actualitzades.
 loadData();
 </script>
 </body></html>
