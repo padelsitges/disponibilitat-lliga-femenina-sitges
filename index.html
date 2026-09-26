@@ -184,10 +184,12 @@ function availabilityMapFromServer() {
     if (!item.pairId || !item.date || !item.date.startsWith(MONTH)) return;
 
     map[item.pairId] ||= {};
-    map[item.pairId][item.date] = {
+    map[item.pairId][item.date] ||= [];
+
+    map[item.pairId][item.date].push({
       slot: item.slot || '',
       otherHour: item.otherHour || ''
-    };
+    });
   });
 
   return map;
@@ -243,7 +245,7 @@ function render() {
   avEl.innerHTML = `
     <h2>📝 La vostra disponibilitat</h2>
     <p class="small">
-      Marqueu només els dies i hores en què podeu jugar.
+      Marqueu totes les opcions de cada dia en què podeu jugar. Podeu marcar més d’una hora.
       Si un dia encara no ho sabeu, deixeu-lo sense marcar.
       Podeu modificar-ho més endavant.
     </p>
@@ -259,62 +261,79 @@ function render() {
 
   days().forEach(dt => {
     const iso = isoDate(2026, 9, dt.getDate());
-    const saved = state[iso] || {};
+    const saved = Array.isArray(state[iso]) ? state[iso] : (state[iso] ? [state[iso]] : []);
+    const selectedSlots = saved.map(v => v.slot);
     const div = document.createElement('div');
     div.className = 'day';
 
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
         <b>${wk[dt.getDay()]} ${dt.getDate()} d’octubre</b>
-        ${saved.slot ? '<button type="button" class="clearDay" style="font-size:13px;padding:6px 9px">Netejar</button>' : ''}
+        ${saved.length ? '<button type="button" class="clearDay" style="font-size:13px;padding:6px 9px">Netejar</button>' : ''}
       </div>
       <div class="opts"></div>
     `;
 
     const opts = div.querySelector('.opts');
-    const current = saved.slot || '';
 
     options(dt).forEach(x => {
       const lab = document.createElement('label');
-      const checked = current === x ? 'checked' : '';
+      const checked = selectedSlots.includes(x) ? 'checked' : '';
+      const type = x === 'NO' ? 'radio' : 'checkbox';
 
       lab.innerHTML = `
-        <input type="radio" name="day-${iso}" value="${x}" ${checked}>
+        <input type="${type}" name="day-${iso}" value="${x}" ${checked}>
         ${label(x)}
       `;
 
-      lab.querySelector('input').addEventListener('change', () => {
+      lab.querySelector('input').addEventListener('change', (ev) => {
         availabilityState[selectedPair] ||= {};
-        availabilityState[selectedPair][iso] = {
-          slot: x,
-          otherHour: x === 'OTHER' ? (saved.otherHour || '') : ''
-        };
+        let current = Array.isArray(availabilityState[selectedPair][iso])
+          ? [...availabilityState[selectedPair][iso]]
+          : (availabilityState[selectedPair][iso] ? [availabilityState[selectedPair][iso]] : []);
+
+        if (x === 'NO') {
+          current = ev.target.checked ? [{ slot: 'NO', otherHour: '' }] : [];
+        } else {
+          current = current.filter(v => v.slot !== 'NO');
+          if (ev.target.checked) {
+            current = current.filter(v => v.slot !== x);
+            current.push({
+              slot: x,
+              otherHour: x === 'OTHER' ? (saved.find(v => v.slot === 'OTHER')?.otherHour || '') : ''
+            });
+          } else {
+            current = current.filter(v => v.slot !== x);
+          }
+        }
+
+        if (current.length) availabilityState[selectedPair][iso] = current;
+        else delete availabilityState[selectedPair][iso];
         render();
       });
 
       opts.appendChild(lab);
     });
 
-    if (current === 'OTHER') {
+    const other = saved.find(v => v.slot === 'OTHER');
+    if (other) {
       const wrap = document.createElement('div');
       wrap.style.marginTop = '9px';
-
       wrap.innerHTML = `
         <input
           type="text"
           class="otherHour"
-          value="${escapeHtml(saved.otherHour || '')}"
+          value="${escapeHtml(other.otherHour || '')}"
           placeholder="Escriu l’hora (ex. 18:30)"
           style="width:100%;max-width:240px;box-sizing:border-box"
         >
       `;
-
       const inp = wrap.querySelector('input');
-
       inp.addEventListener('input', () => {
-        availabilityState[selectedPair][iso].otherHour = inp.value;
+        const arr = availabilityState[selectedPair][iso] || [];
+        const item = arr.find(v => v.slot === 'OTHER');
+        if (item) item.otherHour = inp.value;
       });
-
       div.appendChild(wrap);
     }
 
@@ -340,23 +359,21 @@ function pendingMatches(category, pairId) {
 }
 
 function getAvailability(pairId, iso) {
-  const v = availabilityState[pairId]?.[iso];
-  if (!v || !v.slot || v.slot === 'NO') return null;
+  const values = availabilityState[pairId]?.[iso];
+  if (!values) return [];
 
-  if (v.slot === 'OTHER') {
-    return parseTime(v.otherHour);
-  }
-
-  if (v.slot === '09:00-11:00') {
-    return { type: 'range', min: 9 * 60, max: 11 * 60, label: '09:00–11:00' };
-  }
-
-  const minutes = parseTime(v.slot);
-  return minutes == null ? null : {
-    type: 'from',
-    min: minutes,
-    label: v.slot
-  };
+  const list = Array.isArray(values) ? values : [values];
+  return list
+    .filter(v => v && v.slot && v.slot !== 'NO')
+    .map(v => {
+      if (v.slot === 'OTHER') return parseTime(v.otherHour);
+      if (v.slot === '09:00-11:00') {
+        return { type: 'range', min: 9 * 60, max: 11 * 60, label: '09:00–11:00' };
+      }
+      const minutes = parseTime(v.slot);
+      return minutes == null ? null : { type: 'from', min: minutes, label: v.slot };
+    })
+    .filter(Boolean);
 }
 
 function parseTime(value) {
@@ -439,12 +456,18 @@ function renderMatches() {
 
       const mine = getAvailability(selectedPair, iso);
       const theirs = getAvailability(opponent, iso);
+      const coincidences = [];
 
-      const coincidence = coincide(mine, theirs);
+      mine.forEach(a => {
+        theirs.forEach(b => {
+          const coincidence = coincide(a, b);
+          if (coincidence && !coincidences.includes(coincidence)) coincidences.push(coincidence);
+        });
+      });
 
-      if (coincidence) {
+      if (coincidences.length) {
         rows.push(
-          `${wk[dt.getDay()]} ${dt.getDate()} d’octubre — <b>${coincidence}</b>`
+          `${wk[dt.getDay()]} ${dt.getDate()} d’octubre — <b>${coincidences.join(', ')}</b>`
         );
       }
     });
@@ -470,14 +493,19 @@ function saveAvailability() {
   const status = document.getElementById('saveStatus');
   status.textContent = 'Guardant…';
 
-  const items = Object.entries(availabilityState[selectedPair] || {})
-    .filter(([date, value]) => date.startsWith(MONTH) && value && value.slot)
-    .map(([date, value]) => ({
-      data: date,
-      dia: wk[new Date(`${date}T12:00:00`).getDay()],
-      franja: value.slot,
-      hora_altra: value.slot === 'OTHER' ? (value.otherHour || '') : ''
-    }));
+  const items = [];
+  Object.entries(availabilityState[selectedPair] || {}).forEach(([date, values]) => {
+    if (!date.startsWith(MONTH)) return;
+    const list = Array.isArray(values) ? values : [values];
+    list.filter(v => v && v.slot).forEach(value => {
+      items.push({
+        data: date,
+        dia: wk[new Date(`${date}T12:00:00`).getDay()],
+        franja: value.slot,
+        hora_altra: value.slot === 'OTHER' ? (value.otherHour || '') : ''
+      });
+    });
+  });
 
   const payload = {
     action: 'sync_month',
