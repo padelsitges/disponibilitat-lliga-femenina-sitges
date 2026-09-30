@@ -492,7 +492,6 @@ function saveAvailability() {
 
   const status = document.getElementById('saveStatus');
   const button = document.getElementById('saveBtn');
-
   if (button) button.disabled = true;
   status.textContent = 'Guardant…';
 
@@ -500,7 +499,6 @@ function saveAvailability() {
   Object.entries(availabilityState[selectedPair] || {}).forEach(([date, values]) => {
     if (!date.startsWith(MONTH)) return;
     const list = Array.isArray(values) ? values : [values];
-
     list.filter(v => v && v.slot).forEach(value => {
       items.push({
         data: date,
@@ -519,58 +517,109 @@ function saveAvailability() {
     items
   };
 
-  /*
-   * Enviament compatible amb Google Apps Script:
-   * enviem el JSON com a text/plain i seguim la redirecció
-   * pròpia de la Web App de Apps Script.
-   */
-  fetch(API_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    redirect: 'follow',
-    cache: 'no-cache',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8'
-    },
-    body: JSON.stringify(payload),
-    keepalive: true
-  })
-  .then(() => {
-    DATA.disponibilitat = DATA.disponibilitat.filter(
-      x => x.pairId !== pair.id || !String(x.date || '').startsWith(MONTH)
-    );
+  // Enviem el POST a Apps Script dins d'un iframe ocult.
+  // El mantenim viu mentre comprovem que les dades han arribat a Sheets.
+  const iframeName = 'saveFrame_' + Date.now();
+  const iframe = document.createElement('iframe');
+  iframe.name = iframeName;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
 
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = API_URL;
+  form.target = iframeName;
+  form.style.display = 'none';
+
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'payload';
+  input.value = JSON.stringify(payload);
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+
+  let finished = false;
+  const cleanup = () => {
+    if (form.parentNode) form.remove();
+    if (iframe.parentNode) iframe.remove();
+  };
+
+  const sameItems = () => {
+    const expected = {};
     items.forEach(item => {
-      DATA.disponibilitat.push({
-        pairId: pair.id,
-        pair: pair.name,
-        date: item.data,
-        day: item.dia,
-        slot: item.franja,
-        otherHour: item.hora_altra || ''
-      });
+      expected[item.data] ||= [];
+      expected[item.data].push(`${item.franja}|${item.hora_altra || ''}`);
     });
 
-    availabilityState = availabilityMapFromServer();
-    render();
+    const actual = {};
+    (DATA.disponibilitat || []).forEach(item => {
+      if (item.pairId !== pair.id || !String(item.date || '').startsWith(MONTH)) return;
+      actual[item.date] ||= [];
+      actual[item.date].push(`${item.slot || ''}|${item.otherHour || ''}`);
+    });
 
-    try {
-      localStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ savedAt: Date.now(), data: DATA })
-      );
-    } catch (e) {}
+    const dates = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const date of dates) {
+      const a = (actual[date] || []).slice().sort();
+      const e = (expected[date] || []).slice().sort();
+      if (a.length !== e.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== e[i]) return false;
+      }
+    }
+    return true;
+  };
 
-    status.textContent = '✓ Disponibilitat guardada';
+  const verify = (attempt = 1) => {
+    if (finished) return;
+    status.textContent = attempt === 1 ? 'Comprovant…' : `Comprovant… ${attempt}/4`;
+
+    let callbackDone = false;
+    loadData(() => {
+      callbackDone = true;
+      if (sameItems()) {
+        finished = true;
+        status.textContent = '✓ Disponibilitat guardada correctament';
+        cleanup();
+        return;
+      }
+
+      if (attempt < 4) {
+        setTimeout(() => verify(attempt + 1), 1800);
+      } else {
+        finished = true;
+        status.textContent = '⚠️ No he pogut confirmar el guardat. Torna-ho a provar.';
+        cleanup();
+        if (button) button.disabled = false;
+      }
+    });
+
+    // Si la càrrega de dades falla completament, fem una nova comprovació.
+    setTimeout(() => {
+      if (finished || callbackDone) return;
+      if (attempt < 4) {
+        verify(attempt + 1);
+      } else {
+        finished = true;
+        status.textContent = '⚠️ No he pogut confirmar el guardat. Torna-ho a provar.';
+        cleanup();
+        if (button) button.disabled = false;
+      }
+    }, 9000);
+  };
+
+  // Donem uns segons a Apps Script perquè acabi el POST abans de verificar.
+  setTimeout(() => verify(1), 3000);
+
+  // Xarxa molt lenta: mantenim la petició viva fins a 60 segons.
+  setTimeout(() => {
+    if (finished) return;
+    finished = true;
+    status.textContent = '⚠️ El servidor està tardant massa. Torna-ho a provar.';
+    cleanup();
     if (button) button.disabled = false;
-
-    setTimeout(() => loadData(), 800);
-  })
-  .catch(error => {
-    status.textContent = '⚠️ No s’ha pogut guardar. Torna-ho a provar.';
-    if (button) button.disabled = false;
-    console.error('Error guardant disponibilitat:', error);
-  });
+  }, 60000);
 }
 
 function loadData(callback, attempt = 1) {
