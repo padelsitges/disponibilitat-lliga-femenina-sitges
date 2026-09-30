@@ -93,7 +93,7 @@ input{accent-color:#2d8a4a}
 const API_URL = 'https://script.google.com/macros/s/AKfycbxJiP_hg3jNadvGPaMCZ3uTohaDnwn1ps-iWlXWZE5FbWmbZLweE9Z3719u3sfy8JZeAw/exec';
 const MONTH = '2026-10';
 const MONTH_LABEL = 'octubre de 2026';
-const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10_v2';
+const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10_v3';
 
 let DATA = {
   month: MONTH,
@@ -514,7 +514,6 @@ function sendSaveGet(params, timeoutMs = 15000) {
 
     const query = new URLSearchParams();
     query.set('callback', callbackName);
-    query.set('_cb', Date.now().toString() + Math.random().toString(36).slice(2));
     Object.entries(params).forEach(([key, value]) => {
       query.set(key, String(value ?? ''));
     });
