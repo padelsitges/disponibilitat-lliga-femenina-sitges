@@ -93,7 +93,7 @@ input{accent-color:#2d8a4a}
 const API_URL = 'https://script.google.com/macros/s/AKfycbxJiP_hg3jNadvGPaMCZ3uTohaDnwn1ps-iWlXWZE5FbWmbZLweE9Z3719u3sfy8JZeAw/exec';
 const MONTH = '2026-10';
 const MONTH_LABEL = 'octubre de 2026';
-const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10_v3';
+const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10_v4';
 
 let DATA = {
   month: MONTH,
@@ -695,7 +695,7 @@ function loadData(callback, attempt = 1) {
   const script = document.createElement('script');
   script.id = callbackName;
   script.async = true;
-  script.src = `${API_URL}?callback=${callbackName}&_cb=${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  script.src = `${API_URL}?callback=${callbackName}`;
 
   script.onerror = () => {
     retryOrFail('No s’ha pogut carregar la resposta de la API de la Lliga.');
