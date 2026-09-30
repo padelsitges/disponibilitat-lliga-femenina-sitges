@@ -1,432 +1,750 @@
-const SHEET_PARELLES = 'PARELLES';
-const SHEET_PARTITS = 'PARTITS';
-const SHEET_DISPONIBILITAT = 'DISPONIBILITAT';
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disponibilitat · Lliga Femenina Sitges</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f6f7;margin:0;color:#17202a}
+.wrap{max-width:900px;margin:auto;padding:22px}
+.card{background:white;border-radius:16px;padding:20px;margin:14px 0;box-shadow:0 2px 12px #00000010}
+h1{margin:0 0 5px} h2{margin-top:0}
+select,button,input{font-size:16px;padding:11px;border-radius:10px;border:1px solid #ccd2d8}
+button{cursor:pointer;background:#17202a;color:white;border:0}
+.grid{display:grid;grid-template-columns:1fr;gap:10px}
+.day{border:1px solid #e0e4e8;border-radius:12px;padding:12px}
+.opts{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+label{border:1px solid #d6dbe0;border-radius:9px;padding:8px 10px;cursor:pointer}
+label:has(input:checked){background:#e7f5ec;border-color:#54a66b}
+input{accent-color:#2d8a4a}
+.small{color:#68727d;font-size:14px}
+.match{padding:13px;border:1px solid #e1e5e8;border-radius:12px;margin:8px 0}
+.ok{color:#287a3d}.none{color:#b13b3b}
+.hidden{display:none}
+</style>
 
+<style id="logo-lliga-style">
+.brand-header{
+  max-width:900px;
+  margin:18px auto 6px;
+  padding:12px 18px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+.brand-logo{
+  flex:0 0 auto;
+  width:76px;
+  height:76px;
+  border-radius:18px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 2px 10px rgba(0,0,0,.06);
+  overflow:hidden;
+}
+.brand-logo img{width:68px;height:68px;object-fit:contain;display:block}
+.brand-copy{min-width:0}
+.brand-kicker{
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.12em;
+  color:#c99300;
+  margin-bottom:3px;
+}
+.brand-title{
+  font-size:30px;
+  line-height:1.05;
+  font-weight:800;
+  color:#102b55;
+}
+.brand-subtitle{
+  margin-top:6px;
+  color:#68727d;
+  font-size:14px;
+}
+@media(max-width:600px){
+  .brand-header{padding:10px 14px;gap:12px}
+  .brand-logo{width:62px;height:62px;border-radius:15px}
+  .brand-logo img{width:56px;height:56px}
+  .brand-title{font-size:24px}
+  .brand-kicker{font-size:10px}
+  .brand-subtitle{font-size:12px;line-height:1.35}
+}
+</style>
 
-function doGet(e) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const params = e && e.parameter ? e.parameter : {};
-    const action = String(params.action || '').trim();
-    let resultat;
+</head>
+<body>
+<header class="brand-header"><div class="brand-logo"><img src="data:image/webp;base64,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" alt="Lliga Femenina Pàdel Sitges"></div><div class="brand-copy"><div class="brand-kicker">LLIGA FEMENINA PÀDEL SITGES</div><div class="brand-title">Disponibilitat</div><div class="brand-subtitle">Octubre 2026 · Troba coincidències i organitza els teus partits</div></div></header>
+<div class="wrap">
+<div class="card">
+<h2>Comença aquí</h2>
+</p>
+<label>Categoria<br><select id="cat"></select></label>
+<br><br>
+<label>Parella<br><select id="pair"></select></label>
+</div>
+<div id="availability" class="card hidden"></div>
+<div id="matches" class="card hidden"></div>
+</div>
 
-    if (action === 'save_day') {
-      const items = params.items ? JSON.parse(params.items) : [];
-      resultat = saveDay_(ss, {
-        id_parella: params.id_parella,
-        parella: params.parella,
-        data: params.data,
-        dia: params.dia,
-        items
-      });
-    } else {
-      resultat = {
-        ok: true,
-        parelles: getParelles_(ss),
-        partits: getPartits_(ss),
-        disponibilitat: getDisponibilitat_(ss)
-      };
-    }
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbxJiP_hg3jNadvGPaMCZ3uTohaDnwn1ps-iWlXWZE5FbWmbZLweE9Z3719u3sfy8JZeAw/exec';
+const MONTH = '2026-10';
+const MONTH_LABEL = 'octubre de 2026';
+const CACHE_KEY = 'lliga_disponibilitat_cache_2026_10';
 
-    const json = JSON.stringify(resultat);
-    const callback = params.callback ? String(params.callback).trim() : '';
+let DATA = {
+  month: MONTH,
+  parelles: [],
+  partits: [],
+  disponibilitat: []
+};
 
-    if (callback) {
-      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(callback)) {
-        throw new Error('Callback no vàlid');
-      }
-      return ContentService
-        .createTextOutput(`${callback}(${json});`)
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
+let selectedPair = '';
+let availabilityState = {};
 
-    return ContentService
-      .createTextOutput(json)
-      .setMimeType(ContentService.MimeType.JSON);
+const catEl = document.getElementById('cat');
+const pairEl = document.getElementById('pair');
+const avEl = document.getElementById('availability');
+const matEl = document.getElementById('matches');
 
-  } catch (error) {
-    const json = JSON.stringify({ ok: false, error: error.message });
-    const callback = e && e.parameter ? String(e.parameter.callback || '').trim() : '';
-    if (callback && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(callback)) {
-      return ContentService
-        .createTextOutput(`${callback}(${json});`)
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-    return ContentService
-      .createTextOutput(json)
-      .setMimeType(ContentService.MimeType.JSON);
+const wk = ['Diumenge','Dilluns','Dimarts','Dimecres','Dijous','Divendres','Dissabte'];
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function pad(n) {
+  return String(n).padStart(2, '0');
+}
+
+function isoDate(year, monthIndex, day) {
+  return `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+}
+
+function days() {
+  const arr = [];
+  for (let d = 1; d <= 31; d++) {
+    const dt = new Date(2026, 9, d);
+    // Diumenges: no es mostren.
+    if (dt.getDay() !== 0) arr.push(dt);
+  }
+  return arr;
+}
+
+function options(dt) {
+  if (dt.getDay() === 6) {
+    return [
+      'NO',
+      '09:00','10:00','11:00','12:00','13:00',
+      '16:00','17:00','18:00','19:00','20:00',
+      'OTHER'
+    ];
+  }
+
+  return [
+    'NO',
+    '09:00-11:00',
+    '18:00',
+    '19:00',
+    '20:00',
+    'OTHER'
+  ];
+}
+
+function label(x) {
+  if (x === 'NO') return 'No puc';
+  if (x === 'OTHER') return 'Una altra hora';
+  return x;
+}
+
+function getCategoryPairs(category) {
+  return DATA.parelles.filter(p => p.category === category);
+}
+
+function getCategoryMatches(category) {
+  return DATA.partits.filter(m => m.category === category);
+}
+
+function getCategoryNames() {
+  return [...new Set(DATA.parelles.map(p => p.category))];
+}
+
+function availabilityMapFromServer() {
+  const map = {};
+
+  (DATA.disponibilitat || []).forEach(item => {
+    if (!item.pairId || !item.date || !item.date.startsWith(MONTH)) return;
+
+    map[item.pairId] ||= {};
+    map[item.pairId][item.date] ||= [];
+
+    map[item.pairId][item.date].push({
+      slot: item.slot || '',
+      otherHour: item.otherHour || ''
+    });
+  });
+
+  return map;
+}
+
+function renderCategories() {
+  catEl.innerHTML = '';
+
+  getCategoryNames().forEach(category => {
+    const o = document.createElement('option');
+    o.value = category;
+    o.textContent = category;
+    catEl.appendChild(o);
+  });
+
+  if (!catEl.value && catEl.options.length) {
+    catEl.value = catEl.options[0].value;
   }
 }
 
-function saveDay_(ss, dades) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+function populatePairs(keepPair = '') {
+  const category = catEl.value;
+  const pairs = getCategoryPairs(category);
 
-  try {
-    const sheet = ss.getSheetByName(SHEET_DISPONIBILITAT);
-    if (!sheet) throw new Error('No existeix la pestanya DISPONIBILITAT');
+  pairEl.innerHTML = '';
 
-    const idParella = String(dades.id_parella || '').trim();
-    const parella = String(dades.parella || '').trim();
-    const data = String(dades.data || '').trim();
-    const dia = String(dades.dia || '').trim();
-    const items = Array.isArray(dades.items) ? dades.items : [];
+  pairs.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.name;
+    pairEl.appendChild(o);
+  });
 
-    if (!idParella || !data) throw new Error('Falten dades obligatòries');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data no vàlida');
+  if (pairs.some(p => p.id === keepPair)) {
+    pairEl.value = keepPair;
+  }
 
-    const lastRow = sheet.getLastRow();
-    if (lastRow >= 2) {
-      const values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-      const rowsToDelete = [];
-      for (let i = 0; i < values.length; i++) {
-        if (String(values[i][0] || '').trim() === idParella && formatDate_(values[i][2]) === data) {
-          rowsToDelete.push(i + 2);
+  selectedPair = pairEl.value || '';
+  render();
+}
+
+function render() {
+  if (!selectedPair) {
+    avEl.classList.add('hidden');
+    matEl.classList.add('hidden');
+    return;
+  }
+
+  avEl.classList.remove('hidden');
+
+  const state = availabilityState[selectedPair] || {};
+
+  avEl.innerHTML = `
+    <h2>📝 La vostra disponibilitat</h2>
+    <p class="small">
+      Marqueu totes les opcions de cada dia en què podeu jugar. Podeu marcar més d’una hora.
+      Si un dia encara no ho sabeu, deixeu-lo sense marcar.
+      Podeu modificar-ho més endavant.
+    </p>
+    <p class="small"><b>${MONTH_LABEL}</b> · Els diumenges no apareixen perquè els gestioneu directament entre vosaltres.</p>
+    <div id="daysContainer"></div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="saveBtn">💾 Guardar disponibilitat</button>
+      <span id="saveStatus" class="small"></span>
+    </div>
+  `;
+
+  const container = document.getElementById('daysContainer');
+
+  days().forEach(dt => {
+    const iso = isoDate(2026, 9, dt.getDate());
+    const saved = Array.isArray(state[iso]) ? state[iso] : (state[iso] ? [state[iso]] : []);
+    const selectedSlots = saved.map(v => v.slot);
+    const div = document.createElement('div');
+    div.className = 'day';
+
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+        <b>${wk[dt.getDay()]} ${dt.getDate()} d’octubre</b>
+        ${saved.length ? '<button type="button" class="clearDay" style="font-size:13px;padding:6px 9px">Netejar</button>' : ''}
+      </div>
+      <div class="opts"></div>
+    `;
+
+    const opts = div.querySelector('.opts');
+
+    options(dt).forEach(x => {
+      const lab = document.createElement('label');
+      const checked = selectedSlots.includes(x) ? 'checked' : '';
+      const type = x === 'NO' ? 'radio' : 'checkbox';
+
+      lab.innerHTML = `
+        <input type="${type}" name="day-${iso}" value="${x}" ${checked}>
+        ${label(x)}
+      `;
+
+      lab.querySelector('input').addEventListener('change', (ev) => {
+        availabilityState[selectedPair] ||= {};
+        let current = Array.isArray(availabilityState[selectedPair][iso])
+          ? [...availabilityState[selectedPair][iso]]
+          : (availabilityState[selectedPair][iso] ? [availabilityState[selectedPair][iso]] : []);
+
+        if (x === 'NO') {
+          current = ev.target.checked ? [{ slot: 'NO', otherHour: '' }] : [];
+        } else {
+          current = current.filter(v => v.slot !== 'NO');
+          if (ev.target.checked) {
+            current = current.filter(v => v.slot !== x);
+            current.push({
+              slot: x,
+              otherHour: x === 'OTHER' ? (saved.find(v => v.slot === 'OTHER')?.otherHour || '') : ''
+            });
+          } else {
+            current = current.filter(v => v.slot !== x);
+          }
         }
-      }
-      for (let i = rowsToDelete.length - 1; i >= 0; i--) {
-        sheet.deleteRow(rowsToDelete[i]);
-      }
-    }
 
-    const newRows = [];
-    items.forEach(item => {
-      const franja = String(item.franja || '').trim();
-      if (!franja) return;
-      newRows.push([
-        idParella,
-        parella,
-        data,
-        dia,
-        franja,
-        String(item.hora_altra || '').trim(),
-        new Date()
-      ]);
+        if (current.length) availabilityState[selectedPair][iso] = current;
+        else delete availabilityState[selectedPair][iso];
+        render();
+      });
+
+      opts.appendChild(lab);
     });
 
-    if (newRows.length) {
-      const startRow = sheet.getLastRow() + 1;
-      sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
+    const other = saved.find(v => v.slot === 'OTHER');
+    if (other) {
+      const wrap = document.createElement('div');
+      wrap.style.marginTop = '9px';
+      wrap.innerHTML = `
+        <input
+          type="text"
+          class="otherHour"
+          value="${escapeHtml(other.otherHour || '')}"
+          placeholder="Escriu l’hora (ex. 18:30)"
+          style="width:100%;max-width:240px;box-sizing:border-box"
+        >
+      `;
+      const inp = wrap.querySelector('input');
+      inp.addEventListener('input', () => {
+        const arr = availabilityState[selectedPair][iso] || [];
+        const item = arr.find(v => v.slot === 'OTHER');
+        if (item) item.otherHour = inp.value;
+      });
+      div.appendChild(wrap);
     }
 
-    SpreadsheetApp.flush();
-    return { ok: true, savedItems: newRows.length, data };
-  } finally {
-    lock.releaseLock();
-  }
+    const clear = div.querySelector('.clearDay');
+    if (clear) {
+      clear.addEventListener('click', () => {
+        delete availabilityState[selectedPair][iso];
+        render();
+      });
+    }
+
+    container.appendChild(div);
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', saveAvailability);
+  renderMatches();
 }
 
-
-
-function doPost(e) {
-  try {
-
-    // La nova versió envia un formulari amb el JSON dins de "payload".
-    // També mantenim compatibilitat amb el POST JSON anterior.
-    let dades = null;
-
-    if (e && e.parameter && e.parameter.payload) {
-      dades = JSON.parse(e.parameter.payload);
-    } else if (e && e.postData && e.postData.contents) {
-      dades = JSON.parse(e.postData.contents);
-    } else {
-      throw new Error('No s’han rebut dades');
-    }
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // Nova sincronització mensual.
-    if (dades.action === 'sync_month') {
-      return syncMonth_(ss, dades);
-    }
-
-    // Compatibilitat amb el POST anterior d'un sol dia.
-    return saveSingleAvailability_(ss, dades);
-
-  } catch (error) {
-
-    return jsonResponse_({
-      ok: false,
-      error: error.message
-    });
-  }
+function pendingMatches(category, pairId) {
+  return getCategoryMatches(category).filter(
+    m => m.status === 'Pendent' && (m.pairAId === pairId || m.pairBId === pairId)
+  );
 }
 
+function getAvailability(pairId, iso) {
+  const values = availabilityState[pairId]?.[iso];
+  if (!values) return [];
 
-function syncMonth_(ss, dades) {
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-
-  try {
-    const sheet = ss.getSheetByName(SHEET_DISPONIBILITAT);
-
-    if (!sheet) {
-      throw new Error('No existeix la pestanya DISPONIBILITAT');
-    }
-
-    const idParella = String(dades.id_parella || '').trim();
-    const parella = String(dades.parella || '').trim();
-    const month = String(dades.month || '').trim();
-    const items = Array.isArray(dades.items) ? dades.items : [];
-
-    if (!idParella || !month) {
-      throw new Error('Falten dades obligatòries');
-    }
-
-    if (!/^\d{4}-\d{2}$/.test(month)) {
-      throw new Error('Mes no vàlid');
-    }
-
-    // IMPORTANT: no fem deleteRow() una per una.
-    // Això podia fer que un guardat trigues massa i que la web donés
-    // per acabada l'operació abans que Google Sheets hagués acabat.
-    // Llegim totes les files, eliminem en memòria les de la parella/mes
-    // i escrivim el resultat en un sol bloc.
-    const lastRow = sheet.getLastRow();
-    const existing = lastRow >= 2
-      ? sheet.getRange(2, 1, lastRow - 1, 7).getValues()
-      : [];
-
-    const remaining = existing.filter(row => {
-      const existingId = String(row[0] || '').trim();
-      const existingDate = formatDate_(row[2]);
-
-      return !(
-        existingId === idParella &&
-        existingDate.startsWith(month)
-      );
-    });
-
-    // Preparem les noves files del mes.
-    const newRows = [];
-    items.forEach(item => {
-      const data = String(item.data || '').trim();
-      const dia = String(item.dia || '').trim();
-      const franja = String(item.franja || '').trim();
-      const horaAltra = String(item.hora_altra || '').trim();
-
-      if (!data || !franja) return;
-      if (!data.startsWith(month)) return;
-
-      newRows.push([
-        idParella,
-        parella,
-        data,
-        dia,
-        franja,
-        horaAltra,
-        new Date()
-      ]);
-    });
-
-    const allRows = remaining.concat(newRows);
-    const oldRowCount = Math.max(lastRow - 1, 0);
-
-    if (oldRowCount > 0) {
-      sheet.getRange(2, 1, oldRowCount, 7).clearContent();
-    }
-
-    if (allRows.length > 0) {
-      sheet.getRange(2, 1, allRows.length, 7).setValues(allRows);
-    }
-
-    SpreadsheetApp.flush();
-
-    return jsonResponse_({
-      ok: true,
-      message: 'Disponibilitat mensual actualitzada',
-      savedItems: newRows.length
-    });
-
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-
-function saveSingleAvailability_(ss, dades) {
-
-  const sheet = ss.getSheetByName(SHEET_DISPONIBILITAT);
-
-  if (!sheet) {
-    throw new Error('No existeix la pestanya DISPONIBILITAT');
-  }
-
-  const idParella = String(dades.id_parella || '').trim();
-  const parella = String(dades.parella || '').trim();
-  const data = String(dades.data || '').trim();
-  const dia = String(dades.dia || '').trim();
-  const franja = String(dades.franja || '').trim();
-  const horaAltra = String(dades.hora_altra || '').trim();
-
-  if (!idParella || !data || !franja) {
-    throw new Error('Falten dades obligatòries');
-  }
-
-  const lastRow = sheet.getLastRow();
-
-  if (lastRow >= 2) {
-
-    const values = sheet
-      .getRange(2, 1, lastRow - 1, 7)
-      .getValues();
-
-    for (let i = values.length - 1; i >= 0; i--) {
-
-      const existingId = String(values[i][0] || '').trim();
-      const existingDate = formatDate_(values[i][2]);
-
-      if (
-        existingId === idParella &&
-        existingDate === data
-      ) {
-        sheet.deleteRow(i + 2);
+  const list = Array.isArray(values) ? values : [values];
+  return list
+    .filter(v => v && v.slot && v.slot !== 'NO')
+    .map(v => {
+      if (v.slot === 'OTHER') return parseTime(v.otherHour);
+      if (v.slot === '09:00-11:00') {
+        return { type: 'range', min: 9 * 60, max: 11 * 60, label: '09:00–11:00' };
       }
-    }
+      const minutes = parseTime(v.slot);
+      return minutes == null ? null : { type: 'from', min: minutes, label: v.slot };
+    })
+    .filter(Boolean);
+}
+
+function parseTime(value) {
+  if (!value) return null;
+
+  const cleaned = String(value).trim().replace('.', ':');
+  const match = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) return null;
+
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+
+  if (h > 23 || m > 59) return null;
+
+  return h * 60 + m;
+}
+
+function coincide(a, b) {
+  if (!a || !b) return null;
+
+  // Dues disponibilitats "a partir de" coincideixen a partir de l'hora més tardana.
+  if (a.type === 'from' && b.type === 'from') {
+    const h = Math.max(a.min, b.min);
+    return formatMinutes(h);
   }
 
-  sheet.appendRow([
-    idParella,
-    parella,
-    data,
-    dia,
-    franja,
-    horaAltra,
-    new Date()
-  ]);
+  // Una franja 09:00–11:00 amb una hora concreta / a partir de.
+  if (a.type === 'range' && b.type === 'from') {
+    if (b.min > a.max) return null;
+    return formatMinutes(Math.max(a.min, b.min));
+  }
 
-  return jsonResponse_({
-    ok: true,
-    message: 'Disponibilitat guardada'
+  if (a.type === 'from' && b.type === 'range') {
+    if (a.min > b.max) return null;
+    return formatMinutes(Math.max(a.min, b.min));
+  }
+
+  // Dues franges 09:00–11:00.
+  if (a.type === 'range' && b.type === 'range') {
+    return '09:00–11:00';
+  }
+
+  return null;
+}
+
+function formatMinutes(minutes) {
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+function renderMatches() {
+  if (!selectedPair) return;
+
+  const category = catEl.value;
+  const pairs = Object.fromEntries(
+    getCategoryPairs(category).map(p => [p.id, p.name])
+  );
+
+  matEl.classList.remove('hidden');
+  matEl.innerHTML = '<h2>🔎 Coincidències dels partits pendents</h2>';
+
+  const matches = pendingMatches(category, selectedPair);
+
+  if (!matches.length) {
+    matEl.innerHTML += '<p>🎉 No hi ha partits pendents.</p>';
+    return;
+  }
+
+  matches.forEach(match => {
+    const opponent =
+      match.pairAId === selectedPair ? match.pairBId : match.pairAId;
+
+    const box = document.createElement('div');
+    box.className = 'match';
+
+    const rows = [];
+
+    days().forEach(dt => {
+      const iso = isoDate(2026, 9, dt.getDate());
+
+      const mine = getAvailability(selectedPair, iso);
+      const theirs = getAvailability(opponent, iso);
+      const coincidences = [];
+
+      mine.forEach(a => {
+        theirs.forEach(b => {
+          const coincidence = coincide(a, b);
+          if (coincidence && !coincidences.includes(coincidence)) coincidences.push(coincidence);
+        });
+      });
+
+      if (coincidences.length) {
+        rows.push(
+          `${wk[dt.getDay()]} ${dt.getDate()} d’octubre — <b>${coincidences.join(', ')}</b>`
+        );
+      }
+    });
+
+    box.innerHTML = `
+      <b>🆚 ${escapeHtml(pairs[opponent] || opponent)}</b>
+      ${
+        rows.length
+          ? `<p class="ok">🟢 ${rows.length} coincidència/es</p>
+             <ul>${rows.map(x => `<li>${x}</li>`).join('')}</ul>`
+          : '<p class="none">🔴 Encara no hi ha coincidències.</p>'
+      }
+    `;
+
+    matEl.appendChild(box);
   });
 }
 
+function jsonpRequest(params, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const callbackName = '__lligaSave_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    let done = false;
+    const timer = setTimeout(() => finish(new Error('Temps d’espera esgotat')), timeoutMs);
 
-function getParelles_(ss) {
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[callbackName];
+      if (script.parentNode) script.remove();
+    }
 
-  const sheet = ss.getSheetByName(SHEET_PARELLES);
+    function finish(error, data) {
+      if (done) return;
+      done = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(data);
+    }
 
-  if (!sheet) {
-    throw new Error('No existeix la pestanya PARELLES');
-  }
+    window[callbackName] = data => {
+      if (!data || !data.ok) {
+        finish(new Error(data?.error || 'El servidor no ha pogut guardar les dades.'));
+        return;
+      }
+      finish(null, data);
+    };
 
-  const values = sheet.getDataRange().getValues();
-  const resultat = [];
-
-  for (let i = 1; i < values.length; i++) {
-
-    if (!values[i][0]) continue;
-
-    resultat.push({
-      id: String(values[i][0]),
-      name: String(values[i][1]),
-      category: String(values[i][2])
+    const query = new URLSearchParams({
+      ...params,
+      callback: callbackName
     });
-  }
 
-  return resultat;
+    script.async = true;
+    script.src = `${API_URL}?${query.toString()}`;
+    script.onerror = () => finish(new Error('No s’ha pogut connectar amb el servidor.'));
+    document.body.appendChild(script);
+  });
 }
 
+async function saveAvailability() {
+  const pair = DATA.parelles.find(p => p.id === selectedPair);
+  if (!pair) return;
 
-function getPartits_(ss) {
+  const status = document.getElementById('saveStatus');
+  const button = document.getElementById('saveBtn');
+  if (button) button.disabled = true;
+  status.textContent = 'Guardant…';
 
-  const sheet = ss.getSheetByName(SHEET_PARTITS);
+  const currentState = availabilityState[selectedPair] || {};
+  const itemsByDate = {};
 
-  if (!sheet) {
-    throw new Error('No existeix la pestanya PARTITS');
-  }
+  Object.entries(currentState).forEach(([date, values]) => {
+    if (!date.startsWith(MONTH)) return;
+    const list = Array.isArray(values) ? values : [values];
+    itemsByDate[date] = list.filter(v => v && v.slot).map(value => ({
+      data: date,
+      dia: wk[new Date(`${date}T12:00:00`).getDay()],
+      franja: value.slot,
+      hora_altra: value.slot === 'OTHER' ? (value.otherHour || '') : ''
+    }));
+  });
 
-  const values = sheet.getDataRange().getValues();
-  const resultat = [];
+  // Incloem també els dies que ja estaven guardats al servidor per poder
+  // esborrar correctament un dia que l’usuària hagi deixat buit.
+  (DATA.disponibilitat || []).forEach(item => {
+    if (item.pairId !== pair.id) return;
+    const date = String(item.date || '');
+    if (date.startsWith(MONTH) && !Object.prototype.hasOwnProperty.call(itemsByDate, date)) {
+      itemsByDate[date] = [];
+    }
+  });
 
-  for (let i = 1; i < values.length; i++) {
+  const dates = Object.keys(itemsByDate).sort();
 
-    if (!values[i][0]) continue;
+  try {
+    // Guardem dia per dia mitjançant GET + JSONP. Aquest és el mateix
+    // mecanisme que ja funciona per carregar les dades de la web.
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
+      status.textContent = `Guardant… ${i + 1}/${dates.length}`;
+      const result = await jsonpRequest({
+        action: 'save_day',
+        id_parella: pair.id,
+        parella: pair.name,
+        data: date,
+        dia: wk[new Date(`${date}T12:00:00`).getDay()],
+        items: JSON.stringify(itemsByDate[date] || [])
+      });
+      if (!result.ok) throw new Error(result.error || 'Error de guardat');
+    }
 
-    resultat.push({
-      id: String(values[i][0]),
-      category: String(values[i][1]),
-      pairAId: String(values[i][2]),
-      pairA: String(values[i][3]),
-      pairBId: String(values[i][4]),
-      pairB: String(values[i][5]),
-      status: String(values[i][6]),
-      date: formatDate_(values[i][7]),
-      hour: formatTime_(values[i][8])
+    status.textContent = 'Comprovant…';
+    await new Promise((resolve, reject) => {
+      let completed = false;
+      loadData(() => {
+        if (completed) return;
+        completed = true;
+        resolve();
+      });
+      setTimeout(() => {
+        if (completed) return;
+        completed = true;
+        reject(new Error('No s’ha pogut comprovar el guardat.'));
+      }, 12000);
     });
-  }
 
-  return resultat;
-}
-
-
-function getDisponibilitat_(ss) {
-
-  const sheet = ss.getSheetByName(SHEET_DISPONIBILITAT);
-
-  if (!sheet) {
-    throw new Error('No existeix la pestanya DISPONIBILITAT');
-  }
-
-  const values = sheet.getDataRange().getValues();
-  const resultat = [];
-
-  for (let i = 1; i < values.length; i++) {
-
-    if (!values[i][0]) continue;
-
-    resultat.push({
-      pairId: String(values[i][0]),
-      pair: String(values[i][1]),
-      date: formatDate_(values[i][2]),
-      day: String(values[i][3] || ''),
-      slot: String(values[i][4] || ''),
-      otherHour: String(values[i][5] || '')
+    const expected = {};
+    dates.forEach(date => {
+      expected[date] = (itemsByDate[date] || []).map(item => `${item.franja}|${item.hora_altra || ''}`).sort();
     });
+
+    const actual = {};
+    (DATA.disponibilitat || []).forEach(item => {
+      if (item.pairId !== pair.id) return;
+      const date = String(item.date || '');
+      if (!date.startsWith(MONTH)) return;
+      actual[date] ||= [];
+      actual[date].push(`${item.slot || ''}|${item.otherHour || ''}`);
+    });
+
+    const allDates = new Set([...dates, ...Object.keys(actual)]);
+    for (const date of allDates) {
+      const a = (actual[date] || []).slice().sort();
+      const e = (expected[date] || []).slice().sort();
+      if (a.length !== e.length || a.some((value, index) => value !== e[index])) {
+        throw new Error('Les dades no coincideixen després de guardar.');
+      }
+    }
+
+    status.textContent = '✓ Disponibilitat guardada correctament';
+  } catch (error) {
+    status.textContent = `⚠️ ${error.message}`;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+
+function loadData(callback, attempt = 1) {
+  const maxAttempts = 3;
+  const callbackName = '__lligaApiCallback_' + Date.now() + '_' + attempt;
+  let finished = false;
+  let timeoutId = null;
+
+  function cleanup(script) {
+    if (timeoutId) clearTimeout(timeoutId);
+    delete window[callbackName];
+    if (script && script.parentNode) script.remove();
   }
 
-  return resultat;
-}
+  function retryOrFail(message) {
+    if (finished) return;
+    finished = true;
+    const script = document.getElementById(callbackName);
+    cleanup(script);
 
-
-function formatDate_(value) {
-
-  if (!value) return '';
-
-  if (Object.prototype.toString.call(value) === '[object Date]') {
-
-    return Utilities.formatDate(
-      value,
-      Session.getScriptTimeZone(),
-      'yyyy-MM-dd'
-    );
+    if (attempt < maxAttempts) {
+      setTimeout(() => loadData(callback, attempt + 1), 700);
+    } else if (!DATA.parelles.length) {
+      showError(message || 'No s’ha pogut carregar la resposta de la API de la Lliga.');
+    }
   }
 
-  return String(value).substring(0, 10);
-}
+  function success(data, script) {
+    if (finished) return;
+    finished = true;
 
+    try {
+      if (!data || !data.ok) {
+        throw new Error(data?.error || 'La API no ha retornat dades correctes.');
+      }
 
-function formatTime_(value) {
+      DATA.parelles = data.parelles || [];
+      DATA.partits = data.partits || [];
+      DATA.disponibilitat = data.disponibilitat || [];
 
-  if (!value) return '';
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
+      } catch (e) {}
 
-  if (Object.prototype.toString.call(value) === '[object Date]') {
+      availabilityState = availabilityMapFromServer();
+      renderCategories();
+      populatePairs(selectedPair);
+      render();
 
-    return Utilities.formatDate(
-      value,
-      Session.getScriptTimeZone(),
-      'HH:mm'
-    );
+      if (typeof callback === 'function') callback();
+    } catch (error) {
+      retryOrFail(error.message);
+      return;
+    }
+
+    cleanup(script);
   }
 
-  return String(value);
+  window[callbackName] = function(data) {
+    success(data, document.getElementById(callbackName));
+  };
+
+  const script = document.createElement('script');
+  script.id = callbackName;
+  script.async = true;
+  script.src = `${API_URL}?callback=${callbackName}`;
+
+  script.onerror = () => {
+    retryOrFail('No s’ha pogut carregar la resposta de la API de la Lliga.');
+  };
+
+  timeoutId = setTimeout(() => {
+    retryOrFail('La API està trigant massa a respondre.');
+  }, 7000);
+
+  document.body.appendChild(script);
 }
 
-
-function jsonResponse_(object) {
-
-  return ContentService
-    .createTextOutput(JSON.stringify(object))
-    .setMimeType(ContentService.MimeType.JSON);
+function showError(message) {
+  avEl.classList.remove('hidden');
+  avEl.innerHTML = `
+    <h2>⚠️ Connexió</h2>
+    <p class="none">${escapeHtml(message)}</p>
+    <p class="small">Comprova que la Web App d’Apps Script està publicada i accessible.</p>
+  `;
+  matEl.classList.add('hidden');
 }
+
+catEl.addEventListener('change', () => {
+  selectedPair = '';
+  populatePairs();
+});
+
+pairEl.addEventListener('change', () => {
+  selectedPair = pairEl.value;
+  render();
+});
+
+avEl.addEventListener('change', () => {
+  renderMatches();
+});
+
+// Estat inicial: si tenim una còpia local, la mostrem immediatament
+// i després la refresquem en segon pla des de Google Sheets.
+catEl.innerHTML = '<option>Carregant…</option>';
+pairEl.innerHTML = '<option>Carregant…</option>';
+
+let usedCache = false;
+try {
+  const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+  if (cached && cached.data && Array.isArray(cached.data.parelles) && cached.data.parelles.length) {
+    DATA = cached.data;
+    availabilityState = availabilityMapFromServer();
+    renderCategories();
+    populatePairs();
+    render();
+    usedCache = true;
+  }
+} catch (e) {}
+
+// Sempre refresquem en segon pla per tenir dades actualitzades.
+loadData();
+</script>
+</body></html>
