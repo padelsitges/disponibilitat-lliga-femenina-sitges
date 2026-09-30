@@ -549,7 +549,7 @@ function saveAvailability() {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
     } catch (e) {}
-    status.textContent = '✓ Disponibilitat guardada i comprovada';
+    status.textContent = '✓ Disponibilitat guardada';
     saveBtn.disabled = false;
     window.__savingAvailability = false;
   }
@@ -560,10 +560,26 @@ function saveAvailability() {
     window.__savingAvailability = false;
   }
 
+  function verifyInBackground(attempt) {
+    loadData(() => {
+      if (payloadMatchesServer()) {
+        finishSuccess();
+        return;
+      }
+
+      if (attempt < 2) {
+        status.textContent = 'Comprovant el guardat…';
+        setTimeout(() => send(attempt + 1), 500);
+      } else {
+        finishError();
+      }
+    });
+  }
+
   function send(attempt) {
     status.textContent = attempt === 1
       ? 'Guardant…'
-      : 'Comprovant i tornant a guardar…';
+      : 'Tornant a guardar…';
 
     const iframeName = 'saveFrame_' + Date.now() + '_' + attempt;
     const iframe = document.createElement('iframe');
@@ -594,24 +610,14 @@ function saveAvailability() {
 
     form.submit();
 
-    // Google Apps Script respon abans o després segons la càrrega del servei.
-    // Esperem prou perquè el backend acabi i després comprovem les dades reals
-    // que hi ha a Google Sheets mitjançant la API de lectura.
+    // El backend nuevo guarda en bloque y usa LockService.
+    // La usuaria recibe una confirmación rápida; la comprobación real
+    // se hace inmediatamente después para detectar cualquier fallo.
     setTimeout(() => {
       cleanup();
-      loadData(() => {
-        if (payloadMatchesServer()) {
-          finishSuccess();
-          return;
-        }
-
-        if (attempt < 2) {
-          setTimeout(() => send(attempt + 1), 1200);
-        } else {
-          finishError();
-        }
-      });
-    }, 2500);
+      status.textContent = '✓ Guardado. Comprobando…';
+      verifyInBackground(attempt);
+    }, 1200);
   }
 
   send(1);
@@ -732,10 +738,4 @@ try {
     populatePairs();
     render();
     usedCache = true;
-  }
-} catch (e) {}
-
-// Sempre refresquem en segon pla per tenir dades actualitzades.
-loadData();
-</script>
-</body></html>
+  
