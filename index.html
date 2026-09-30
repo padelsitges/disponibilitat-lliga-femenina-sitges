@@ -487,21 +487,20 @@ function renderMatches() {
 }
 
 function saveAvailability() {
-  if (window.__savingAvailability) return;
-
   const pair = DATA.parelles.find(p => p.id === selectedPair);
   if (!pair) return;
 
   const status = document.getElementById('saveStatus');
-  const saveBtn = document.getElementById('saveBtn');
-  window.__savingAvailability = true;
-  saveBtn.disabled = true;
+  const button = document.getElementById('saveBtn');
+
+  if (button) button.disabled = true;
   status.textContent = 'Guardant…';
 
   const items = [];
   Object.entries(availabilityState[selectedPair] || {}).forEach(([date, values]) => {
     if (!date.startsWith(MONTH)) return;
     const list = Array.isArray(values) ? values : [values];
+
     list.filter(v => v && v.slot).forEach(value => {
       items.push({
         data: date,
@@ -520,94 +519,59 @@ function saveAvailability() {
     items
   };
 
-  function key(item) {
-    return [
-      String(item.data || ''),
-      String(item.franja || item.slot || ''),
-      String(item.hora_altra || item.otherHour || '')
-    ].join('|');
-  }
+  /*
+   * Guardem directament amb fetch en mode no-cors.
+   * No cal llegir la resposta: esperem que la petició acabi.
+   * Això evita eliminar l'iframe abans que Google Apps Script
+   * hagi acabat de guardar les dades.
+   */
+  const body = new URLSearchParams();
+  body.set('payload', JSON.stringify(payload));
 
-  function finishSuccess() {
-    // El backend ya ha terminado cuando recibimos la respuesta del formulario.
-    // No bloqueamos la interfaz esperando una segunda lectura de toda la API.
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
-    } catch (e) {}
-    status.textContent = '✓ Disponibilitat guardada';
-    saveBtn.disabled = false;
-    window.__savingAvailability = false;
+  fetch(API_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: body,
+    keepalive: true
+  })
+  .then(() => {
+    DATA.disponibilitat = DATA.disponibilitat.filter(
+      x => x.pairId !== pair.id || !String(x.date || '').startsWith(MONTH)
+    );
 
-    // Actualizamos los datos reales en segundo plano, sin hacer esperar a la jugadora.
-    setTimeout(() => {
-      loadData(() => {
-        availabilityState = availabilityMapFromServer();
-        render();
+    items.forEach(item => {
+      DATA.disponibilitat.push({
+        pairId: pair.id,
+        pair: pair.name,
+        date: item.data,
+        day: item.dia,
+        slot: item.franja,
+        otherHour: item.hora_altra || ''
       });
-    }, 0);
-  }
+    });
 
-  function finishError() {
-    status.textContent = '⚠️ No s’ha pogut completar el guardat. Torna-ho a provar.';
-    saveBtn.disabled = false;
-    window.__savingAvailability = false;
-  }
+    availabilityState = availabilityMapFromServer();
+    render();
 
-  function send() {
-    const iframeName = 'saveFrame_' + Date.now();
-    const iframe = document.createElement('iframe');
-    iframe.name = iframeName;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
+    try {
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({ savedAt: Date.now(), data: DATA })
+      );
+    } catch (e) {}
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = API_URL;
-    form.target = iframeName;
-    form.style.display = 'none';
+    status.textContent = '✓ Disponibilitat guardada';
+    if (button) button.disabled = false;
 
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify(payload);
-    form.appendChild(input);
-    document.body.appendChild(form);
-
-    let finished = false;
-    let timeoutId = null;
-    let submitted = false;
-
-    const cleanup = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (form.parentNode) form.remove();
-      if (iframe.parentNode) iframe.remove();
-    };
-
-    iframe.onload = () => {
-      // Ignorar la carga inicial del iframe; solo cuenta la respuesta del POST.
-      if (!submitted || finished) return;
-      finished = true;
-      cleanup();
-      finishSuccess();
-    };
-
-    // Damos un instante para que el iframe complete su carga inicial antes del POST.
-    setTimeout(() => {
-      if (finished) return;
-      submitted = true;
-      form.submit();
-    }, 100);
-
-    // Solo mostramos error si el servidor realmente no responde en un tiempo razonable.
-    timeoutId = setTimeout(() => {
-      if (finished) return;
-      finished = true;
-      cleanup();
-      finishError();
-    }, 15000);
-  }
-
-  send();
+    // Refresquem les dades reals del servidor en segon pla.
+    setTimeout(() => loadData(), 500);
+  })
+  .catch(error => {
+    status.textContent = '⚠️ No s’ha pogut guardar. Torna-ho a provar.';
+    if (button) button.disabled = false;
+    console.error('Error guardant disponibilitat:', error);
+  });
+}
 
 function loadData(callback, attempt = 1) {
   const maxAttempts = 3;
