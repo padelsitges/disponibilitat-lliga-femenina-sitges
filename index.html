@@ -487,10 +487,15 @@ function renderMatches() {
 }
 
 function saveAvailability() {
+  if (window.__savingAvailability) return;
+
   const pair = DATA.parelles.find(p => p.id === selectedPair);
   if (!pair) return;
 
   const status = document.getElementById('saveStatus');
+  const saveBtn = document.getElementById('saveBtn');
+  window.__savingAvailability = true;
+  saveBtn.disabled = true;
   status.textContent = 'Guardant…';
 
   const items = [];
@@ -515,56 +520,101 @@ function saveAvailability() {
     items
   };
 
-  /*
-   * Form POST a un iframe:
-   * evita problemes de CORS perquè no necessitem llegir la resposta.
-   */
-  const iframeName = 'saveFrame_' + Date.now();
+  function key(item) {
+    return [
+      String(item.data || ''),
+      String(item.franja || item.slot || ''),
+      String(item.hora_altra || item.otherHour || '')
+    ].join('|');
+  }
 
-  const iframe = document.createElement('iframe');
-  iframe.name = iframeName;
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
+  function payloadMatchesServer() {
+    const serverItems = (DATA.disponibilitat || [])
+      .filter(x => x.pairId === pair.id && String(x.date || '').startsWith(MONTH))
+      .map(x => ({
+        data: x.date,
+        franja: x.slot,
+        hora_altra: x.otherHour || ''
+      }))
+      .map(key)
+      .sort();
 
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = API_URL;
-  form.target = iframeName;
-  form.style.display = 'none';
+    const wantedItems = items.map(key).sort();
+    return JSON.stringify(serverItems) === JSON.stringify(wantedItems);
+  }
 
-  const input = document.createElement('input');
-  input.type = 'hidden';
-  input.name = 'payload';
-  input.value = JSON.stringify(payload);
-
-  form.appendChild(input);
-  document.body.appendChild(form);
-  form.submit();
-
-  setTimeout(() => {
-    form.remove();
-    iframe.remove();
-
-    // Actualitzem la disponibilitat localment: no cal tornar a descarregar
-    // tots els partits i totes les disponibilitats de la Lliga.
-    DATA.disponibilitat = DATA.disponibilitat.filter(x => x.pairId !== pair.id || !String(x.date || '').startsWith(MONTH));
-    items.forEach(item => {
-      DATA.disponibilitat.push({
-        pairId: pair.id,
-        pair: pair.name,
-        date: item.data,
-        day: item.dia,
-        slot: item.franja,
-        otherHour: item.hora_altra || ''
-      });
-    });
+  function finishSuccess() {
     availabilityState = availabilityMapFromServer();
     render();
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
     } catch (e) {}
-    status.textContent = '✓ Disponibilitat actualitzada';
-  }, 1200);
+    status.textContent = '✓ Disponibilitat guardada i comprovada';
+    saveBtn.disabled = false;
+    window.__savingAvailability = false;
+  }
+
+  function finishError() {
+    status.textContent = '⚠️ No s’ha pogut confirmar el guardat. Torna-ho a provar.';
+    saveBtn.disabled = false;
+    window.__savingAvailability = false;
+  }
+
+  function send(attempt) {
+    status.textContent = attempt === 1
+      ? 'Guardant…'
+      : 'Comprovant i tornant a guardar…';
+
+    const iframeName = 'saveFrame_' + Date.now() + '_' + attempt;
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = API_URL;
+    form.target = iframeName;
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      if (form.parentNode) form.remove();
+      if (iframe.parentNode) iframe.remove();
+    };
+
+    form.submit();
+
+    // Google Apps Script respon abans o després segons la càrrega del servei.
+    // Esperem prou perquè el backend acabi i després comprovem les dades reals
+    // que hi ha a Google Sheets mitjançant la API de lectura.
+    setTimeout(() => {
+      cleanup();
+      loadData(() => {
+        if (payloadMatchesServer()) {
+          finishSuccess();
+          return;
+        }
+
+        if (attempt < 2) {
+          setTimeout(() => send(attempt + 1), 1200);
+        } else {
+          finishError();
+        }
+      });
+    }, 2500);
+  }
+
+  send(1);
 }
 
 function loadData(callback, attempt = 1) {
