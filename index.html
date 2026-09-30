@@ -528,60 +528,33 @@ function saveAvailability() {
     ].join('|');
   }
 
-  function payloadMatchesServer() {
-    const serverItems = (DATA.disponibilitat || [])
-      .filter(x => x.pairId === pair.id && String(x.date || '').startsWith(MONTH))
-      .map(x => ({
-        data: x.date,
-        franja: x.slot,
-        hora_altra: x.otherHour || ''
-      }))
-      .map(key)
-      .sort();
-
-    const wantedItems = items.map(key).sort();
-    return JSON.stringify(serverItems) === JSON.stringify(wantedItems);
-  }
-
   function finishSuccess() {
-    availabilityState = availabilityMapFromServer();
-    render();
+    // El backend ya ha terminado cuando recibimos la respuesta del formulario.
+    // No bloqueamos la interfaz esperando una segunda lectura de toda la API.
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: DATA }));
     } catch (e) {}
     status.textContent = '✓ Disponibilitat guardada';
     saveBtn.disabled = false;
     window.__savingAvailability = false;
+
+    // Actualizamos los datos reales en segundo plano, sin hacer esperar a la jugadora.
+    setTimeout(() => {
+      loadData(() => {
+        availabilityState = availabilityMapFromServer();
+        render();
+      });
+    }, 0);
   }
 
   function finishError() {
-    status.textContent = '⚠️ No s’ha pogut confirmar el guardat. Torna-ho a provar.';
+    status.textContent = '⚠️ No s’ha pogut completar el guardat. Torna-ho a provar.';
     saveBtn.disabled = false;
     window.__savingAvailability = false;
   }
 
-  function verifyInBackground(attempt) {
-    loadData(() => {
-      if (payloadMatchesServer()) {
-        finishSuccess();
-        return;
-      }
-
-      if (attempt < 2) {
-        status.textContent = 'Comprovant el guardat…';
-        setTimeout(() => send(attempt + 1), 500);
-      } else {
-        finishError();
-      }
-    });
-  }
-
-  function send(attempt) {
-    status.textContent = attempt === 1
-      ? 'Guardant…'
-      : 'Tornant a guardar…';
-
-    const iframeName = 'saveFrame_' + Date.now() + '_' + attempt;
+  function send() {
+    const iframeName = 'saveFrame_' + Date.now();
     const iframe = document.createElement('iframe');
     iframe.name = iframeName;
     iframe.style.display = 'none';
@@ -600,28 +573,41 @@ function saveAvailability() {
     form.appendChild(input);
     document.body.appendChild(form);
 
-    let cleaned = false;
+    let finished = false;
+    let timeoutId = null;
+    let submitted = false;
+
     const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
+      if (timeoutId) clearTimeout(timeoutId);
       if (form.parentNode) form.remove();
       if (iframe.parentNode) iframe.remove();
     };
 
-    form.submit();
-
-    // El backend nuevo guarda en bloque y usa LockService.
-    // La usuaria recibe una confirmación rápida; la comprobación real
-    // se hace inmediatamente después para detectar cualquier fallo.
-    setTimeout(() => {
+    iframe.onload = () => {
+      // Ignorar la carga inicial del iframe; solo cuenta la respuesta del POST.
+      if (!submitted || finished) return;
+      finished = true;
       cleanup();
-      status.textContent = '✓ Guardado. Comprobando…';
-      verifyInBackground(attempt);
-    }, 1200);
+      finishSuccess();
+    };
+
+    // Damos un instante para que el iframe complete su carga inicial antes del POST.
+    setTimeout(() => {
+      if (finished) return;
+      submitted = true;
+      form.submit();
+    }, 100);
+
+    // Solo mostramos error si el servidor realmente no responde en un tiempo razonable.
+    timeoutId = setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      finishError();
+    }, 15000);
   }
 
-  send(1);
-}
+  send();
 
 function loadData(callback, attempt = 1) {
   const maxAttempts = 3;
@@ -738,4 +724,10 @@ try {
     populatePairs();
     render();
     usedCache = true;
-  
+  }
+} catch (e) {}
+
+// Sempre refresquem en segon pla per tenir dades actualitzades.
+loadData();
+</script>
+</body></html>
