@@ -520,18 +520,19 @@ function saveAvailability() {
   };
 
   /*
-   * Guardem directament amb fetch en mode no-cors.
-   * No cal llegir la resposta: esperem que la petició acabi.
-   * Això evita eliminar l'iframe abans que Google Apps Script
-   * hagi acabat de guardar les dades.
+   * Enviament compatible amb Google Apps Script:
+   * enviem el JSON com a text/plain i seguim la redirecció
+   * pròpia de la Web App de Apps Script.
    */
-  const body = new URLSearchParams();
-  body.set('payload', JSON.stringify(payload));
-
   fetch(API_URL, {
     method: 'POST',
     mode: 'no-cors',
-    body: body,
+    redirect: 'follow',
+    cache: 'no-cache',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
+    body: JSON.stringify(payload),
     keepalive: true
   })
   .then(() => {
@@ -563,8 +564,7 @@ function saveAvailability() {
     status.textContent = '✓ Disponibilitat guardada';
     if (button) button.disabled = false;
 
-    // Refresquem les dades reals del servidor en segon pla.
-    setTimeout(() => loadData(), 500);
+    setTimeout(() => loadData(), 800);
   })
   .catch(error => {
     status.textContent = '⚠️ No s’ha pogut guardar. Torna-ho a provar.';
